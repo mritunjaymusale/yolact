@@ -23,10 +23,10 @@ def readVideo(input_video_name):
 def writeVideo(output_video_name,width,height,fps):
     return (
     ffmpeg
-    .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(width, height), framerate=fps)
-    .output(output_video_name, vcodec='libx264')
+    .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(width, height), framerate=fps,hwaccel='cuda')
+    .output(output_video_name, vcodec='h264_nvenc',preset='slow',maxrate='8M',bufsize='8M',video_bitrate='8M')
     .overwrite_output()
-    .run_async(pipe_stdin=True,quiet=True)
+    .run_async(pipe_stdin=True,)
 )
 
 def getAudio(filename):

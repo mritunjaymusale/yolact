@@ -16,8 +16,18 @@ python /content/download_google_drive/download_gdrive.py 1ZPu1YR2UzGHQD0o1rEqy-j
 cd /content
 sudo aptitude install -y libavformat-dev libavcodec-dev libavfilter-dev libavutil-dev ffmpeg libx264-dev libavdevice-dev   libswscale-dev libswresample-dev
 
+sudo  apt-get update && sudo apt-get install -y git make yasm pkg-config
 
+git clone https://git.videolan.org/git/ffmpeg/nv-codec-headers \
+  && cd nv-codec-headers \
+  && git checkout sdk/9.0 \
+  && sudo make install
 
+git clone https://git.ffmpeg.org/ffmpeg.git \
+  && cd ffmpeg \
+  && git checkout 018a427 \
+  && ./configure --enable-cuda --enable-cuvid --enable-nvenc --enable-nonfree --enable-libnpp --extra-cflags=-I/usr/local/cuda/include  --extra-ldflags=-L/usr/local/cuda/lib64 \
+  && sudo make -j -s && sudo cp ffmpeg /usr/local/bin && sudo cp ffprobe /usr/local/bin/
 
 
  

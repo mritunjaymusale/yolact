@@ -164,3 +164,6 @@ _.py
 
 *.zip
 .pytest_cache
+
+nv-codec-headers
+ffmpeg
