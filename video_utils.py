@@ -26,7 +26,7 @@ def writeVideo(output_video_name,width,height,fps):
     .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(width, height), framerate=fps)
     .output(output_video_name, vcodec='libx264')
     .overwrite_output()
-    .run_async(pipe_stdin=True,)
+    .run_async(pipe_stdin=True,quiet=True)
 )
 
 def getAudio(filename):

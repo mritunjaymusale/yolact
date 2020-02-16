@@ -54,6 +54,7 @@ while True:
     classes, scores, boxes, masks = postprocess(
         preds, input_video_width, input_video_height, score_threshold=0.25)
     
+    # preserving the bounding boxes from previous frame
     previous_box= boxes[mask_id]
     previous_box = previous_box.repeat(int(boxes.shape[0]),1) 
     simalirity = cosine_sim(boxes.float(),previous_box.float())
