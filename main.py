@@ -16,7 +16,7 @@ initial_setup()
 net = setupYolact()
 
 transform = FastBaseTransform()
-input_video_name = 'tucker.mp4'
+input_video_name = 'out.mp4'
 output_video_name = 'final.mp4'
 input_video_width, input_video_height, input_video_fps = video_utils.getVideoMetadata(input_video_name)
 
@@ -28,9 +28,32 @@ videoToFrames = video_utils.readVideo(input_video_name)
 framesToVideo = video_utils.writeVideo(output_video_name,input_video_width,input_video_height,input_video_fps)
 
 
+
+
+
+def doImageSegmentation(input_image):
+    tensor_image = torch.from_numpy(input_image).cuda().float()
+    tensor_image_4d = tensor_image[None, ...]
+    tensor_image_4d = transform(tensor_image_4d)
+    preds = net(tensor_image_4d)
+    classes, scores, boxes, masks = postprocess(
+        preds, input_video_width, input_video_height, score_threshold=0.55)
+    return boxes, tensor_image, masks
+
+
+def objectTrackingBasedOnPreviousBoundingBox(previous_box,boxes):
+    '''
+    Returns the index location of array of bounding boxes
+    '''
+    previous_box = previous_box.repeat(int(boxes.shape[0]),1) 
+    simalirity = cosine_sim(boxes.float(),previous_box.float())
+    best_similarity = torch.max(simalirity)
+    mask_index_location = ((simalirity==best_similarity).nonzero())
+    return mask_index_location
+
 ##### Now to use ######
 count = 0
-previous_box=torch.zeros([1,4]).cuda().float()
+previous_box=None
 cosine_sim= CosineSimilarity()
 
 
@@ -47,26 +70,29 @@ while True:
     )
 
     # actual NN part
-    tensor_image = torch.from_numpy(in_frame).cuda().float()
-    tensor_image_4d = tensor_image[None, ...]
-    tensor_image_4d = transform(tensor_image_4d)
-    preds = net(tensor_image_4d)
-    classes, scores, boxes, masks = postprocess(
-        preds, input_video_width, input_video_height, score_threshold=0.25)
-    
-    # preserving the bounding boxes from previous frame
-    previous_box= boxes[mask_id]
-    previous_box = previous_box.repeat(int(boxes.shape[0]),1) 
-    simalirity = cosine_sim(boxes.float(),previous_box.float())
-    best_similarity = torch.max(simalirity)
-    mask_index_location = ((simalirity==best_similarity).nonzero())
-    
-    previous_box = boxes[mask_index_location[0].item()]
+    boxes, tensor_image, masks = doImageSegmentation(in_frame)
 
-    # actual frame manipulation 
-    tensor_image[masks[mask_index_location[0].item()] == 1] = 0
+    # only needed for the first frame
+    if previous_box is None :
+        previous_box= boxes[mask_id]
+
+    
+
+
+    #check if humans in frame
+    if boxes.shape!=torch.Size([0]):
+        # human detected in frame
+        mask_index_location = objectTrackingBasedOnPreviousBoundingBox(previous_box,boxes)
+        
+        previous_box = boxes[mask_index_location[0].item()]
+
+        # actual frame manipulation 
+        tensor_image[masks[mask_index_location[0].item()] == 1] = 0
+    else:
+        # human not detected in frame use previous bounding box to mask
+        tensor_image[previous_box[1]:previous_box[3],previous_box[0]:previous_box[2],: ] = 0
+        
     out_frame = tensor_image.int().detach().cpu().numpy()
-
     framesToVideo.stdin.write(
         out_frame
         .astype(np.uint8)
@@ -80,10 +106,10 @@ videoToFrames.wait()
 framesToVideo.wait()
 
 
-source_audio = video_utils.getAudio(input_video_name)
-new_video = video_utils.getVideo(output_video_name)
-final_video = ffmpeg.output(new_video,source_audio,'test.mp4')
-final_video.run()
+# source_audio = video_utils.getAudio(input_video_name)
+# new_video = video_utils.getVideo(output_video_name)
+# final_video = ffmpeg.output(new_video,source_audio,'test.mp4', vcodec='h264_nvenc')
+# final_video.run()
 
 quit()
 

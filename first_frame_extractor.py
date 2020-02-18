@@ -30,7 +30,7 @@ net = setupYolact()
 net = setupYolact()
 
 transform = FastBaseTransform()
-input_video_name = 'tucker.mp4'
+input_video_name = 'out.mp4'
 width, height, fps = video_utils.getVideoMetadata(input_video_name)
 
 process1 = video_utils.readVideo(input_video_name)
