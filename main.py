@@ -16,7 +16,7 @@ initial_setup()
 net = setupYolact()
 
 transform = FastBaseTransform()
-input_video_name = 'out.mp4'
+input_video_name = 'tucker.mp4'
 output_video_name = 'final.mp4'
 input_video_width, input_video_height, input_video_fps = video_utils.getVideoMetadata(input_video_name)
 
@@ -60,7 +60,7 @@ cosine_sim= CosineSimilarity()
 RGB_CHANNELS=3
 
 while True:
-    in_bytes = videoToFrames.stdout.read(input_video_width * input_video_height * RGB_CHANNELS)
+    in_bytes = videoToFrames.stdout.read(input_video_height * input_video_width * RGB_CHANNELS)
     if not in_bytes:
         break
     in_frame = (
