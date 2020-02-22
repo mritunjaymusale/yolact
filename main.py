@@ -7,21 +7,28 @@ from layers.output_utils import postprocess
 from utils.augmentations import FastBaseTransform
 from yolact import setupYolact
 from backend_setup import initial_setup
-
+import cv2
 import video_utils 
+import argparse
 
 initial_setup()
 
 
 net = setupYolact()
 
-transform = FastBaseTransform()
-input_video_name = 'tucker.mp4'
-output_video_name = 'final.mp4'
-input_video_width, input_video_height, input_video_fps = video_utils.getVideoMetadata(input_video_name)
 
 # cant take commandline inputs after the ffmpeg prompt happens
-mask_id = int(input('Enter the mask id from first_frame.png:'))
+# mask_id = int(input('Enter the mask id from first_frame.png:'))
+parser = argparse.ArgumentParser()
+parser.add_argument("input_video_name",type=str)
+parser.add_argument("output_video_name",type=str)
+args = parser.parse_args()
+
+transform = FastBaseTransform()
+input_video_name =args.input_video_name
+output_video_name =args.output_video_name
+input_video_width, input_video_height, input_video_fps = video_utils.getVideoMetadata(input_video_name)
+
 
 videoToFrames = video_utils.readVideo(input_video_name)
 
@@ -51,6 +58,13 @@ def objectTrackingBasedOnPreviousBoundingBox(previous_box,boxes):
     mask_index_location = ((simalirity==best_similarity).nonzero())
     return mask_index_location
 
+def getCustomBB(tensor_image,cv2_window_name):
+    temp_image = np.array(tensor_image.int().detach().cpu().numpy(),np.uint8)
+    customBB = cv2.selectROI(cv2_window_name,cv2.cvtColor(temp_image, cv2.COLOR_BGR2RGB ),fromCenter=False,
+			showCrosshair=True)
+    return customBB
+ 
+
 ##### Now to use ######
 count = 0
 previous_box=None
@@ -58,6 +72,8 @@ cosine_sim= CosineSimilarity()
 
 
 RGB_CHANNELS=3
+cv2_window_name ="output"
+cv2.namedWindow(cv2_window_name, cv2.WINDOW_NORMAL)    
 
 while True:
     in_bytes = videoToFrames.stdout.read(input_video_height * input_video_width * RGB_CHANNELS)
@@ -74,7 +90,8 @@ while True:
 
     # only needed for the first frame
     if previous_box is None :
-        previous_box= boxes[mask_id]
+        customBB= getCustomBB(tensor_image,cv2_window_name)
+        previous_box = torch.Tensor(customBB).cuda().float()
 
     
 
@@ -89,15 +106,32 @@ while True:
         # actual frame manipulation 
         tensor_image[masks[mask_index_location[0].item()] == 1] = 0
     else:
-        # human not detected in frame use previous bounding box to mask
-        tensor_image[previous_box[1]:previous_box[3],previous_box[0]:previous_box[2],: ] = 0
-        
-    out_frame = tensor_image.int().detach().cpu().numpy()
-    framesToVideo.stdin.write(
-        out_frame
-        .astype(np.uint8)
-        .tobytes()
-    )
+        # human not detected in frame 
+
+        # use previous bounding box to mask
+        # tensor_image[previous_box[1]:previous_box[3],previous_box[0]:previous_box[2],: ] = 0
+
+
+        print("Not detected. Asking for custom BB")
+        print(tensor_image.shape)
+        customBB= getCustomBB(tensor_image,cv2_window_name)
+        previous_box = torch.Tensor(customBB).cuda().float()
+        print(previous_box)
+
+    
+    # for debugging and viewing whats happening
+    # runs slowly intentionally 
+    # temp_image = np.array(tensor_image.int().detach().cpu().numpy(),np.uint8)
+    # cv2.imshow(cv2_window_name,cv2.cvtColor(temp_image, cv2.COLOR_BGR2RGB ) )
+    # cv2.waitKey(1)
+
+
+    # out_frame = tensor_image.int().detach().cpu().numpy()
+    # framesToVideo.stdin.write(
+    #     out_frame
+    #     .astype(np.uint8)
+    #     .tobytes()
+    # )
 
 
 
