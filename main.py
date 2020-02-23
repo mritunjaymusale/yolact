@@ -2,7 +2,6 @@ import ffmpeg
 import numpy as np
 import torch
 from torch.nn import CosineSimilarity
-
 from layers.output_utils import postprocess
 from utils.augmentations import FastBaseTransform
 from yolact import setupYolact
@@ -10,7 +9,7 @@ from backend_setup import initial_setup
 import cv2
 import video_utils 
 import argparse
-
+from sort import *
 initial_setup()
 
 
@@ -44,8 +43,8 @@ def doImageSegmentation(input_image):
     tensor_image_4d = transform(tensor_image_4d)
     preds = net(tensor_image_4d)
     classes, scores, boxes, masks = postprocess(
-        preds, input_video_width, input_video_height, score_threshold=0.55)
-    return boxes, tensor_image, masks
+        preds, input_video_width, input_video_height, score_threshold=0.25)
+    return boxes, tensor_image, masks,scores
 
 
 def objectTrackingBasedOnPreviousBoundingBox(previous_box,boxes):
@@ -69,7 +68,7 @@ def getCustomBB(tensor_image,cv2_window_name):
 count = 0
 previous_box=None
 cosine_sim= CosineSimilarity()
-
+sort = Sort()
 
 RGB_CHANNELS=3
 cv2_window_name ="output"
@@ -86,11 +85,20 @@ while True:
     )
 
     # actual NN part
-    boxes, tensor_image, masks = doImageSegmentation(in_frame)
+    boxes, tensor_image, masks, scores = doImageSegmentation(in_frame)
 
     # only needed for the first frame
     if previous_box is None :
-        customBB= getCustomBB(tensor_image,cv2_window_name)
+        customBB= getCustomBB(tensor_image,cv2_window_name)        
+        trackers =sort.update(boxes.int().detach().cpu().numpy())
+        for index,box in enumerate(trackers):
+            box = np.array(box,np.int32)
+            color = (np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256))
+            frame = cv2.putText(in_frame,str(box[4]),(box[0],box[1]),cv2.FONT_HERSHEY_PLAIN,1,color,2)
+            cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),color,2)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        cv2.destroyWindow(cv2_window_name)
+        cv2.imwrite('first_frame.png',frame)
         previous_box = torch.Tensor(customBB).cuda().float()
 
     
@@ -100,6 +108,7 @@ while True:
     if boxes.shape!=torch.Size([0]):
         # human detected in frame
         mask_index_location = objectTrackingBasedOnPreviousBoundingBox(previous_box,boxes)
+        trackers = sort.update(boxes.int().detach().cpu().numpy())
         
         previous_box = boxes[mask_index_location[0].item()]
 
@@ -108,15 +117,14 @@ while True:
     else:
         # human not detected in frame 
 
-        # use previous bounding box to mask
-        # tensor_image[previous_box[1]:previous_box[3],previous_box[0]:previous_box[2],: ] = 0
-
-
-        print("Not detected. Asking for custom BB")
-        print(tensor_image.shape)
         customBB= getCustomBB(tensor_image,cv2_window_name)
-        previous_box = torch.Tensor(customBB).cuda().float()
-        print(previous_box)
+        previous_box = torch.Tensor(customBB).cuda().int()
+        trackers = sort.update(boxes.int().detach().cpu().numpy())
+        print(trackers)
+        # print(previous_box)
+        
+        # use previous bounding box to mask
+        tensor_image[previous_box[1]:previous_box[3],previous_box[0]:previous_box[2],: ] = 0
 
     
     # for debugging and viewing whats happening
@@ -126,12 +134,12 @@ while True:
     # cv2.waitKey(1)
 
 
-    # out_frame = tensor_image.int().detach().cpu().numpy()
-    # framesToVideo.stdin.write(
-    #     out_frame
-    #     .astype(np.uint8)
-    #     .tobytes()
-    # )
+    out_frame = tensor_image.int().detach().cpu().numpy()
+    framesToVideo.stdin.write(
+        out_frame
+        .astype(np.uint8)
+        .tobytes()
+    )
 
 
 
