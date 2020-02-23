@@ -16,8 +16,6 @@ initial_setup()
 net = setupYolact()
 
 
-# cant take commandline inputs after the ffmpeg prompt happens
-# mask_id = int(input('Enter the mask id from first_frame.png:'))
 parser = argparse.ArgumentParser()
 parser.add_argument("input_video_name",type=str)
 parser.add_argument("output_video_name",type=str)
@@ -26,16 +24,12 @@ args = parser.parse_args()
 transform = FastBaseTransform()
 input_video_name =args.input_video_name
 output_video_name =args.output_video_name
+sort = Sort()
+
+
+
+
 input_video_width, input_video_height, input_video_fps = video_utils.getVideoMetadata(input_video_name)
-
-
-videoToFrames = video_utils.readVideo(input_video_name)
-
-framesToVideo = video_utils.writeVideo(output_video_name,input_video_width,input_video_height,input_video_fps)
-
-
-
-
 
 def doImageSegmentation(input_image):
     tensor_image = torch.from_numpy(input_image).cuda().float()
@@ -45,6 +39,37 @@ def doImageSegmentation(input_image):
     classes, scores, boxes, masks = postprocess(
         preds, input_video_width, input_video_height, score_threshold=0.25)
     return boxes, tensor_image, masks,scores
+
+cap = cv2.VideoCapture(input_video_name)
+while True:
+    ret,frame = cap.read()
+    if ret:
+        boxes, tensor_image, masks, scores = doImageSegmentation(frame)
+        trackers =sort.update(boxes.int().detach().cpu().numpy())
+        for index,box in enumerate(trackers):
+            box = np.array(box,np.int32)
+            color = (np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256))
+            frame = cv2.putText(frame,str(box[4]),(box[0],box[1]),cv2.FONT_HERSHEY_PLAIN,1,color,2)
+            cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),color,2)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        cv2.imwrite('first_frame.png',frame)
+        break
+
+# cant take commandline inputs after the ffmpeg prompt happens
+print(trackers)
+mask_id = int(input('Enter the mask id from first_frame.png:'))
+track_mask_id =mask_id- 1
+print(trackers[np.where(trackers[:,4]==track_mask_id)])
+quit()
+
+videoToFrames = video_utils.readVideo(input_video_name)
+
+framesToVideo = video_utils.writeVideo(output_video_name,input_video_width,input_video_height,input_video_fps)
+
+
+
+
+
 
 
 def objectTrackingBasedOnPreviousBoundingBox(previous_box,boxes):
@@ -68,11 +93,10 @@ def getCustomBB(tensor_image,cv2_window_name):
 count = 0
 previous_box=None
 cosine_sim= CosineSimilarity()
-sort = Sort()
 
 RGB_CHANNELS=3
 cv2_window_name ="output"
-cv2.namedWindow(cv2_window_name, cv2.WINDOW_NORMAL)    
+# cv2.namedWindow(cv2_window_name, cv2.WINDOW_NORMAL)    
 
 while True:
     in_bytes = videoToFrames.stdout.read(input_video_height * input_video_width * RGB_CHANNELS)
@@ -89,18 +113,18 @@ while True:
 
     # only needed for the first frame
     if previous_box is None :
-        customBB= getCustomBB(tensor_image,cv2_window_name)        
-        trackers =sort.update(boxes.int().detach().cpu().numpy())
-        for index,box in enumerate(trackers):
-            box = np.array(box,np.int32)
-            color = (np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256))
-            frame = cv2.putText(in_frame,str(box[4]),(box[0],box[1]),cv2.FONT_HERSHEY_PLAIN,1,color,2)
-            cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),color,2)
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        cv2.destroyWindow(cv2_window_name)
-        cv2.imwrite('first_frame.png',frame)
-        previous_box = torch.Tensor(customBB).cuda().float()
-
+        # customBB= getCustomBB(tensor_image,cv2_window_name)        
+        # trackers =sort.update(boxes.int().detach().cpu().numpy())
+        # for index,box in enumerate(trackers):
+        #     box = np.array(box,np.int32)
+        #     color = (np.random.randint(0,256), np.random.randint(0,256), np.random.randint(0,256))
+        #     frame = cv2.putText(frame,str(box[4]),(box[0],box[1]),cv2.FONT_HERSHEY_PLAIN,1,color,2)
+        #     cv2.rectangle(frame,(box[0],box[1]),(box[2],box[3]),color,2)
+        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # cv2.destroyWindow(cv2_window_name)
+        # cv2.imwrite('first_frame.png',frame)
+        # previous_box = torch.Tensor(customBB).cuda().float()
+        previous_box = boxes[mask_id]
     
 
 
