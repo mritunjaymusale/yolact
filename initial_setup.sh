@@ -5,7 +5,7 @@
 
 sudo aptitude update
 sudo pip3 install cython wheel
-sudo pip3 install opencv-python pillow pycocotools matplotlib ffmpeg-python pytest pytest-cov
+sudo pip3 install opencv-python pillow pycocotools matplotlib ffmpeg-python pytest pytest-cov pylint rope filterpy==1.4.1
 cd /content/yolact/external/DCNv2
 sudo python3 setup.py build develop
 cd /content

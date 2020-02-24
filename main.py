@@ -37,7 +37,7 @@ def doImageSegmentation(input_image):
     tensor_image_4d = transform(tensor_image_4d)
     preds = net(tensor_image_4d)
     classes, scores, boxes, masks = postprocess(
-        preds, input_video_width, input_video_height, score_threshold=0.25)
+        preds, input_video_width, input_video_height, score_threshold=0.15)
     return boxes, tensor_image, masks,scores
 
 cap = cv2.VideoCapture(input_video_name)
@@ -45,6 +45,7 @@ while True:
     ret,frame = cap.read()
     if ret:
         boxes, tensor_image, masks, scores = doImageSegmentation(frame)
+        print(boxes)
         trackers =sort.update(boxes.int().detach().cpu().numpy())
         for index,box in enumerate(trackers):
             box = np.array(box,np.int32)
@@ -58,9 +59,9 @@ while True:
 # cant take commandline inputs after the ffmpeg prompt happens
 print(trackers)
 mask_id = int(input('Enter the mask id from first_frame.png:'))
-track_mask_id =mask_id- 1
-print(trackers[np.where(trackers[:,4]==track_mask_id)])
-quit()
+
+
+
 
 videoToFrames = video_utils.readVideo(input_video_name)
 
@@ -72,7 +73,7 @@ framesToVideo = video_utils.writeVideo(output_video_name,input_video_width,input
 
 
 
-def objectTrackingBasedOnPreviousBoundingBox(previous_box,boxes):
+def returnTensorIndexWithClosestSimilarity(previous_box,boxes):
     '''
     Returns the index location of array of bounding boxes
     '''
@@ -96,7 +97,7 @@ cosine_sim= CosineSimilarity()
 
 RGB_CHANNELS=3
 cv2_window_name ="output"
-# cv2.namedWindow(cv2_window_name, cv2.WINDOW_NORMAL)    
+cv2.namedWindow(cv2_window_name, cv2.WINDOW_NORMAL)    
 
 while True:
     in_bytes = videoToFrames.stdout.read(input_video_height * input_video_width * RGB_CHANNELS)
@@ -128,28 +129,34 @@ while True:
     
 
 
+    trackers = sort.update(boxes.int().detach().cpu().numpy())
+    
     #check if humans in frame
     if boxes.shape!=torch.Size([0]):
+       
+       
+       
         # human detected in frame
-        mask_index_location = objectTrackingBasedOnPreviousBoundingBox(previous_box,boxes)
-        trackers = sort.update(boxes.int().detach().cpu().numpy())
-        
-        previous_box = boxes[mask_index_location[0].item()]
+        # find the box based user's mask id 
+        required_bounding_box = trackers[np.where(trackers[:,4]==mask_id)]
+        if required_bounding_box.size == 0:
 
-        # actual frame manipulation 
-        tensor_image[masks[mask_index_location[0].item()] == 1] = 0
-    else:
-        # human not detected in frame 
+            print("Target not in sight, do custom bounding boxes")
+            customBB= getCustomBB(tensor_image,cv2_window_name)
+            customBB = torch.Tensor(customBB).cuda().int()
+            tensor_image[customBB[1]:customBB[3],customBB[0]:customBB[2],: ] = 0
 
-        customBB= getCustomBB(tensor_image,cv2_window_name)
-        previous_box = torch.Tensor(customBB).cuda().int()
-        trackers = sort.update(boxes.int().detach().cpu().numpy())
-        print(trackers)
-        # print(previous_box)
-        
-        # use previous bounding box to mask
-        tensor_image[previous_box[1]:previous_box[3],previous_box[0]:previous_box[2],: ] = 0
+        else :
+            required_bounding_box =required_bounding_box[0][0:4]
+            required_bounding_box = torch.Tensor(required_bounding_box).cuda().int()
 
+            mask_index_location = returnTensorIndexWithClosestSimilarity(required_bounding_box,boxes)
+            
+            previous_box = boxes[mask_index_location[0].item()]
+
+            # actual frame manipulation 
+            tensor_image[masks[mask_index_location[0].item()] == 1] = 0
+   
     
     # for debugging and viewing whats happening
     # runs slowly intentionally 
