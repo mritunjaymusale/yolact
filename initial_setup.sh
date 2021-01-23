@@ -1,8 +1,8 @@
-#sudo add-apt-repository ppa:savoury1/ffmpeg4 -y
+sudo add-apt-repository ppa:savoury1/ffmpeg4 -y
 #sudo add-apt-repository ppa:savoury1/graphics -y
-#sudo add-apt-repository ppa:savoury1/multimedia -y
+sudo add-apt-repository ppa:savoury1/multimedia -y
 
-
+sudo apt install aptitude -y
 sudo aptitude update
 sudo pip3 install cython wheel
 sudo pip3 install opencv-python pillow pycocotools matplotlib ffmpeg-python pytest pytest-cov pylint rope filterpy==1.4.1
